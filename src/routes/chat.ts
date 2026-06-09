@@ -1,46 +1,46 @@
-import {Router} from 'express';
+import { Router } from 'express';
 import db from '../db';
-import {RowDataPacket} from 'mysql2';
+import { RowDataPacket } from 'mysql2';
 
 const router = Router();
+const pool = db.promise();
 
-router.get('/get-chats', (req, res) => {
-  const {mobile} = req.query;
-  //   res.send('Chat Route : user mobile = ' + mobile);
+router.get('/get-chats', async (req, res) => {
 
-  db.query(
-    "SELECT * FROM `chat` WHERE `chat`.`user_1` = '" +
-      mobile +
-      "' OR `chat`.`user_2` = '" +
-      mobile +
-      "'",
-    (err, result: RowDataPacket[]) => {
-      if (!err) {
-        let finalChats = [];
+  try {
+    const mobile = req.query.mobile;
 
-        for (let i = 0; i < result.length; i++) {
-          const chat = result[i];
+    if (!mobile) {
+      res.status(400).send({ msg: 'Mobile number is required' });
+    }
 
-          db.query(
-            "SELECT `message`,`send_at` FROM `chat_history` WHERE `chat_chat_id`='" +
-              chat.chat_id +
-              "' ORDER BY `send_at` DESC LIMIT 1",
-            (err, messageResult: RowDataPacket[]) => {
-              if (!err) {
-                const lastMessage = messageResult[0];
+    const [chats] = await pool.query<RowDataPacket[]>("SELECT * FROM `chat` WHERE `chat`.`user_1`=? OR `chat`.`user_2`=?", [mobile, mobile]);
 
-                const data = {};
-              } else {
-                res.status(500).send('Error fetching chat history');
-              }
-            },
-          );
-        }
-      } else {
-        res.status(500).send('Error fetching chats');
-      }
-    },
-  );
+    const chatData = [];
+
+    for (let i = 0; i < chats.length; i++) {
+
+      const chat = chats[i];
+
+      const [message] = await pool.query<RowDataPacket[]>("SELECT * FROM `chat_history` WHERE `chat_chat_id`=? ORDER BY `send_at` DESC LIMIT 1", [chat.chat_id]);
+
+      const [user] = await pool.query<RowDataPacket[]>("SELECT `mobile`,`fname`,`lname` FROM `user` WHERE `mobile`=?", [chat.user_1 === mobile ? chat.user_2 : chat.user_1]);
+
+      const data = {
+        user: user[0],
+        last_message: message[0]
+      };
+
+      chatData.push(data);
+    }
+
+    res.status(200).send(chatData);
+    // console.log(chatData);
+
+  } catch (error) {
+    res.status(500).send({ msg: 'Error fetching chats', error });
+  }
+
 });
 
 export default router;
