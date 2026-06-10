@@ -5,6 +5,7 @@ import { RowDataPacket } from 'mysql2';
 const router = Router();
 const pool = db.promise();
 
+
 router.get('/get-chats', async (req, res) => {
 
   try {
